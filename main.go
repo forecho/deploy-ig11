@@ -22,34 +22,53 @@ type Config struct {
 	} `json:"server"`
 }
 
+var conf *Config
+
 func main() {
 	m := multiconfig.NewWithPath("config.json")
-	conf := new(Config)
+	conf = new(Config)
 	m.MustLoad(conf) // Panic's if there is any error
 
+	http.HandleFunc("/webhooks", githubWebhook)
+	http.HandleFunc("/update", update)
+
+	http.ListenAndServe(":8090", nil)
+}
+
+func githubWebhook(w http.ResponseWriter, r *http.Request) {
 	hook, _ := github.New(github.Options.Secret(conf.GithubWebhookSecret))
 
-	http.HandleFunc("/webhooks", func(w http.ResponseWriter, r *http.Request) {
-		// 方便调试
-		// updateCode(conf)
-
-		payload, err := hook.Parse(r, github.ReleaseEvent, github.PullRequestEvent)
-		if err != nil {
-			if err == github.ErrEventNotFound {
-				// ok event wasn;t one of the ones asked to be parsed
-			}
+	payload, err := hook.Parse(r, github.ReleaseEvent, github.PullRequestEvent)
+	if err != nil {
+		if err == github.ErrEventNotFound {
+			// ok event wasn;t one of the ones asked to be parsed
 		}
-		fmt.Println("收到请求")
+	}
+	fmt.Println("收到请求")
 
-		switch payload.(type) {
+	switch payload.(type) {
 
-		case github.ReleasePayload:
-			release := payload.(github.ReleasePayload)
+	case github.ReleasePayload:
+		release := payload.(github.ReleasePayload)
+		updateCode(conf)
+		fmt.Printf("%+v", release)
+	}
+}
+
+func update(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		if err := r.ParseForm(); err != nil {
+			fmt.Fprintf(w, "ParseForm() err: %v", err)
+			return
+		}
+		fmt.Fprintf(w, "Post from website! r.PostFrom = %v\n", r.PostForm)
+		secret := r.FormValue("secret")
+
+		if secret != "" && secret == conf.GithubWebhookSecret {
+			fmt.Println("开始更新代码")
 			updateCode(conf)
-			fmt.Printf("%+v", release)
 		}
-	})
-	http.ListenAndServe(":8090", nil)
+	}
 }
 
 func updateCode(conf *Config) {
@@ -88,6 +107,7 @@ func command(cmd string) {
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		fmt.Printf("Failed to execute command: %s", cmd)
+		fmt.Printf(err.Error())
 	}
 	fmt.Println(string(out))
 }
