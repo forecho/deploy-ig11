@@ -2,9 +2,11 @@
     "git_url": "git@github.com:forecho/blog.git",
     "github_webhook_secret": "xxxx",
     "clone_after_cmd": "composer install",
+    "ssh_key_path": "/root/.ssh/deploy",
     "server": [
       {
-        "rsync_remote_path": "root@192.0.1.3:/root/www/web",
+        "ssh": "root@192.0.1.3",
+        "rsync_remote_path": "/root/www/web",
         "sync_after_cmd": "docker exec -w /var/www/web laradock_workspace_1 php yii migrate"
       }
     ]
